@@ -1,0 +1,61 @@
+
+pipeline {
+    agent { label 'banking-agent' }
+
+    triggers {
+        githubPush()  
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                echo "Pulling latest code..."
+                git branch: 'main',
+                    url: 'https://github.com/madhav-jha/madhav-jha-banking-app-devops.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Running Maven build"
+                dir('app') {
+                    sh 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Tests') {
+            steps {
+                echo "Running tests..."
+                dir('app') {
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                echo "Archiving JAR..."
+                archiveArtifacts artifacts: 'app/target/*.jar', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            emailext(
+                to: "jhmadhav2025@gmail.com",
+                subject: "SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}",
+                body: "Build successful. Logs: ${BUILD_URL}console"
+            )
+        }
+        failure {
+            emailext(
+                to: "jhamadhav2025@gmail.com",
+                subject: "FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
+                body: "Build failed. Check logs: ${BUILD_URL}console"
+            )
+        }
+    }
+}

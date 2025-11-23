@@ -1,0 +1,12 @@
+# Terraform
+Devops/terraform/.terraform/
+Devops/terraform/terraform.tfstate
+Devops/terraform/terraform.tfstate.backup
+Devops/terraform/.terraform.lock.hcl
+
+# Maven build
+app/target/
+
+# macOS
+.DS_Store
+

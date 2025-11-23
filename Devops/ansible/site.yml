@@ -1,0 +1,248 @@
+---
+# ===========================
+# 1) Jenkins Master Setup
+# ===========================
+- name: Setup Jenkins Master
+  hosts: jenkins_master
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Java 17 and Git
+      apt:
+        name:
+          - openjdk-17-jdk
+          - git
+        state: present
+
+    - name: Add Jenkins GPG key (new method)
+      shell: |
+        curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
+        | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+      args:
+        creates: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repo (using keyring)
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    - name: Ensure Jenkins service running
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+
+
+
+# ===========================
+# 2) Jenkins Agent Setup
+# ===========================
+- name: Setup Jenkins Agent
+  hosts: jenkins_agent
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Java, Git, Maven
+      apt:
+        name:
+          - openjdk-11-jdk
+          - git
+          - maven
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+
+# ===========================
+# 3) Kubernetes Master Setup
+# ===========================
+- name: Setup Kubernetes Master
+  hosts: k8s_master
+  become: yes
+  tasks:
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Disable swap permanently
+      replace:
+        path: /etc/fstab
+        regexp: '(^.*swap.*$)'
+        replace: '# \1'
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add Kubernetes repo key
+      apt_key:
+        url: https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key
+        state: present
+
+    - name: Add Kubernetes repo
+      apt_repository:
+        repo: "deb https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /"
+        state: present
+
+    - name: Install kubeadm kubelet kubectl
+      apt:
+        name:
+          - kubeadm
+          - kubelet
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Initialize K8s master
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Set kubeconfig for ubuntu user
+      file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0700"
+
+    - name: Copy admin.conf
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        owner: ubuntu
+        group: ubuntu
+        mode: "0600"
+        remote_src: yes
+
+    - name: Install Flannel CNI
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      command: >
+        kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_cmd
+
+    - name: Save join command
+      copy:
+        dest: /home/ubuntu/join.sh
+        content: "#!/bin/bash\n{{ join_cmd.stdout }}\n"
+        mode: "0755"
+
+
+# ===========================
+# 4) Kubernetes Worker Setup
+# ===========================
+- name: Setup Kubernetes Workers
+  hosts: k8s_workers
+  become: yes
+  tasks:
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Disable swap permanently
+      replace:
+        path: /etc/fstab
+        regexp: '(^.*swap.*$)'
+        replace: '# \1'
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add repo key
+      apt_key:
+        url: https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key
+        state: present
+
+    - name: Add repo
+      apt_repository:
+        repo: "deb https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /"
+        state: present
+
+    - name: Install kubeadm kubelet
+      apt:
+        name:
+          - kubeadm
+          - kubelet
+        state: present
+        update_cache: yes
+
+    - name: Copy join script from master
+      fetch:
+        src: /home/ubuntu/join.sh
+        dest: /tmp/join.sh
+        flat: yes
+      delegate_to: "{{ groups['k8s_master'][0] }}"
+      run_once: true
+
+    - name: Transfer join script to worker
+      copy:
+        src: /tmp/join.sh
+        dest: /home/ubuntu/join.sh
+        mode: "0755"
+
+    - name: Join the cluster
+      command: /home/ubuntu/join.sh
+
+
+# ===========================
+# 5) Monitoring Node Setup
+# ===========================
+- name: Setup Monitoring Node
+  hosts: monitoring
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Docker (Prometheus/Grafana container ke liye)
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
