@@ -3,7 +3,7 @@ pipeline {
     agent { label 'banking-agent' }
 
     triggers {
-        githubPush()  
+        githubPush()   // GitHub webhook trigger
     }
 
     stages {
@@ -18,32 +18,45 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo "Running Maven build"
+                echo "Running Maven build..."
                 dir('app') {
                     sh 'mvn clean package'
                 }
             }
         }
-        
-        stage('Docker Build & Push') {
-    steps {
-        dir('app') {
-            script {
-                image = docker.build("jhamadhav2025/banking-app:${BUILD_NUMBER}")
-                docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-creds') {
-                    image.push()
-                }
-            }
-        }
-    }
-}
-
 
         stage('Tests') {
             steps {
                 echo "Running tests..."
                 dir('app') {
                     sh 'mvn test'
+                }
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                dir('app') {
+                    script {
+                        def image = "jhamadhav2025/banking-app:${BUILD_NUMBER}"
+
+                        echo "Building Docker image: ${image}"
+                        sh "docker build -t ${image} ."
+
+                        withCredentials([
+                            usernamePassword(
+                                credentialsId: 'docker-hub-creds',
+                                usernameVariable: 'DOCKER_USER',
+                                passwordVariable: 'DOCKER_PASS'
+                            )
+                        ]) {
+                            sh """
+                              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                              docker push ${image}
+                              docker logout
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -59,7 +72,7 @@ pipeline {
     post {
         success {
             emailext(
-                to: "jhmadhav2025@gmail.com",
+                to: "jhamadhav2025@gmail.com",
                 subject: "SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}",
                 body: "Build successful. Logs: ${BUILD_URL}console"
             )
@@ -73,3 +86,4 @@ pipeline {
         }
     }
 }
+
