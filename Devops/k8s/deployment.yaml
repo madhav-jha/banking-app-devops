@@ -19,3 +19,4 @@ spec:
           image: jhamadhav2025/banking-app:{{BUILD_NUMBER}}
           ports:
             - containerPort: 8080
+          
