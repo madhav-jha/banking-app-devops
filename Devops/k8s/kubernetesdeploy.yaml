@@ -1,37 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: bankapp-eta-deploy
+  name: banking-app
   labels:
-    app: bankapp-eta-app
+    app: banking-app
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: bankapp-eta-app
+      app: banking-app
   template:
     metadata:
       labels:
-        app: bankapp-eta-app
+        app: banking-app
     spec:
       containers:
-      - name: bankapp-eta-container
-        image: loksaieta/bankapp-eta-app
-        ports:
-        - containerPort: 8082
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: bankapp-eta-np-service
-  labels:
-    app: bankapp-eta-app
-spec:
-  selector:
-    app: bankapp-eta-app
-
-  type: NodePort
-  ports:
-  - nodePort: 31002    
-    port: 8082
-    targetPort: 8082
+        - name: banking-app
+          image: jhamadhav2025/banking-app:{{BUILD_NUMBER}}
+          ports:
+            - containerPort: 8080
