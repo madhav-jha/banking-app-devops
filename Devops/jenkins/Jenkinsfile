@@ -49,11 +49,11 @@ pipeline {
                                 passwordVariable: 'DOCKER_PASS'
                             )
                         ]) {
-                            sh """
+                            sh '''
                               echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                               docker push ${image}
                               docker logout
-                            """
+                            '''
                         }
                     }
                 }
@@ -64,11 +64,14 @@ pipeline {
             steps {
                 echo "Deploying to Kubernetes..."
 
-                sh """
-                sed -i 's/{{BUILD_NUMBER}}/${BUILD_NUMBER}/g' Devops/k8s/deployment.yaml
-                kubectl apply -f Devops/k8s/deployment.yaml
-                kubectl apply -f Devops/k8s/service.yaml
-                """
+                sh '''
+                export KUBECONFIG=/home/ubuntu/.kube/config
+
+                sed -i "s/{{BUILD_NUMBER}}/${BUILD_NUMBER}/g" Devops/k8s/deployment.yaml
+
+                kubectl apply --validate=false -f Devops/k8s/deployment.yaml
+                kubectl apply --validate=false -f Devops/k8s/service.yaml
+                '''
             }
         }
 
