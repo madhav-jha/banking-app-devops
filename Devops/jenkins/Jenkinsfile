@@ -24,6 +24,20 @@ pipeline {
                 }
             }
         }
+        
+        stage('Docker Build & Push') {
+    steps {
+        dir('app') {
+            script {
+                image = docker.build("jhamadhav2025/banking-app:${BUILD_NUMBER}")
+                docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-creds') {
+                    image.push()
+                }
+            }
+        }
+    }
+}
+
 
         stage('Tests') {
             steps {
