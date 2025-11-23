@@ -12,7 +12,7 @@ pipeline {
             steps {
                 echo "Pulling latest code..."
                 git branch: 'main',
-                    url: 'https://github.com/madhav-jha/madhav-jha-banking-app-devops.git'
+                    url: 'https://github.com/madhav-jha/banking-app-devops.git'
             }
         }
 
