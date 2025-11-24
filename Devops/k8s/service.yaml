@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: banking-app-service
+spec:
+  selector:
+    app: banking-app
+  ports:
+    - port: 82          # cluster ke andar service port (82 rakh sakte ho)
+      targetPort: 82    # container ka andar wala port
+      nodePort: 31002   # bahar se aane wala port (browser)
+  type: NodePort
