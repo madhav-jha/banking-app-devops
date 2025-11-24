@@ -1,102 +1,45 @@
 pipeline {
-    agent { label 'banking-agent' }
+    agent { label 'jenkins-agent' }   
 
-    triggers {
-        githubPush()
+    environment {
+        DOCKERHUB_USER = 'jhamadhav2025'
+        IMAGE_NAME     = 'banking-app'
     }
 
     stages {
-
-        stage('Checkout Code') {
+        stage('SCM Checkout') {
             steps {
-                echo "Pulling latest code..."
-                git branch: 'main',
-                    url: 'https://github.com/madhav-jha/banking-app-devops.git'
+                checkout scm
             }
         }
 
-        stage('Build') {
+        stage('Maven Build') {
             steps {
-                echo "Running Maven build..."
-                dir('app') {
-                    sh 'mvn clean package'
-                }
-            }
-        }
-
-        stage('Tests') {
-            steps {
-                echo "Running tests..."
-                dir('app') {
-                    sh 'mvn test'
-                }
+                sh './mvnw clean package'
             }
         }
 
         stage('Docker Build & Push') {
             steps {
-                dir('app') {
-                    script {
-                        def image = "jhamadhav2025/banking-app:${BUILD_NUMBER}"
-
-                        echo "Building Docker image: ${image}"
-                        sh "docker build -t ${image} ."
-
-                        withCredentials([
-                            usernamePassword(
-                                credentialsId: 'docker-hub-creds',
-                                usernameVariable: 'DOCKER_USER',
-                                passwordVariable: 'DOCKER_PASS'
-                            )
-                        ]) {
-                            sh """
-                              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                              docker push ${image}
-                              docker logout
-                            """
-                        }
-                    }
-                }
+                sh """
+                  docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_NUMBER} .
+                  echo "${DOCKERHUB_PASS}" | docker login -u "${DOCKERHUB_USER}" 
+                  docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_NUMBER}
+                """
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                echo "Deploying to Kubernetes..."
-
-                sh '''
-                export KUBECONFIG=/home/ubuntu/.kube/config
-
-                sed -i "s/{{BUILD_NUMBER}}/${BUILD_NUMBER}/g" Devops/k8s/deployment.yaml
-
-                kubectl apply --validate=false -f Devops/k8s/deployment.yaml
-                kubectl apply --validate=false -f Devops/k8s/service.yaml
-                '''
+                sh """
+                ssh -o StrictHostKeyChecking=no ubuntu@<15.206.139.185> '
+                  kubectl set image deployment/banking-app \
+                    banking-app=${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_NUMBER} \
+                    --namespace=default || \
+                  kubectl apply -f /home/ubuntu/manifests/banking-app.yaml
+                '
+                """
             }
-        }
-
-        stage('Archive Artifact') {
-            steps {
-                echo "Archiving JAR..."
-                archiveArtifacts artifacts: 'app/target/*.jar', fingerprint: true
-            }
-        }
-    }
-
-    post {
-        success {
-            emailext(
-                to: "jhamadhav2025@gmail.com",
-                subject: "SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}",
-                body: "Build successful. Logs: ${BUILD_URL}console"
-            )
-        }
-        failure {
-            emailext(
-                to: "jhamadhav2025@gmail.com",
-                subject: "FAILED: ${JOB_NAME} #${BUILD_NUMBER}",
-                body: "Build failed. Check logs: ${BUILD_URL}console"
-            )
         }
     }
 }
