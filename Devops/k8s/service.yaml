@@ -6,7 +6,7 @@ spec:
   selector:
     app: banking-app
   ports:
-    - port: 82          # cluster ke andar service port (82 rakh sakte ho)
-      targetPort: 82    # container ka andar wala port
-      nodePort: 31002   # bahar se aane wala port (browser)
+    - port: 82          
+      targetPort: 82    
+      nodePort: 31002   
   type: NodePort
